@@ -2,26 +2,17 @@
 
 loadProgress::loadProgress(){
     connect(this,&loadProgress::continueThread,this,&loadProgress::process);
-    breaked = false;
-    qDebug() << "Created";
 }
 
 loadProgress::~loadProgress(){
-    qDebug() << "Destructed";
 }
 
 void loadProgress::breakMe(){
     breaked = true;
-    ref = false;
-}
-void loadProgress::breakMe2(){
-    breaked = true;
-    ref = true;
 }
 
 void loadProgress::process(){
 
-    qDebug() << "proces" << value;
     if (value <= 1000){
         emit newValue((value));
         value++;
@@ -34,14 +25,14 @@ void loadProgress::process(){
     }else {
         emit finished();
     }
-    if (ref){
-        emit breakDone();
-    }
 }
 
 
 void progress::setProgressValue(int v){
     progressBar->setValue(v);
+}
+
+progress::~progress(){
 }
 
 progress::progress(QWidget *parent) : QWidget(parent){
@@ -64,24 +55,23 @@ progress::progress(QWidget *parent) : QWidget(parent){
     connect(mainThread, &QThread::finished, this,[this]{
         mainThread->deleteLater();
     });
+    connect(lp,&loadProgress::newValue,this,&progress::setProgressValue);
     connect(stopButton,&QPushButton::clicked,this,[lp]{
         lp->breakMe();
     });
-    connect(lp,&loadProgress::newValue,this,&progress::setProgressValue);
     connect(this,&progress::breakThread,this,[lp]{
-        lp->breakMe2();
+        lp->breakMe();
     });
-    connect(lp,&loadProgress::breakDone,this,&progress::destructMe);
     mainThread->start();
 }
 
-void progress::destructMe(){
-   deleteLater();
-}
 
 void progress::closeEvent(QCloseEvent *event){
-    if (mainThread->isRunning()){
+    if (mainThread != nullptr){
         emit breakThread();
+        QTimer::singleShot(200,this,[this]{
+            deleteLater();
+        });
     }else{
         deleteLater();
     }
@@ -119,7 +109,6 @@ AddNewWindow::AddNewWindow(Widget *parent) : QWidget(parent){
 }
 
 AddNewWindow::~AddNewWindow(){
-
 }
 
 void AddNewWindow::closeEvent(QCloseEvent *event){
@@ -139,17 +128,17 @@ Widget::Widget(QWidget *parent)
     : QWidget(parent)
 {
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
-    QMessageBox box(this);
-    box.setWindowTitle("Baza danych");
-    box.setText("Chcesz utworzyć nową baze danych, \nczy wybrać istniejącą ?");
-    box.setStandardButtons(QMessageBox::Yes|QMessageBox::No);
-    auto buttonY = box.button(QMessageBox::Yes);
-    buttonY->setText("Utwórz nową");
-    auto buttonN = box.button(QMessageBox::No);
-    buttonN->setText("Wybierz istniejącą");
-    auto choice = box.exec();
+    QMessageBox *box = new QMessageBox(this);
+    box->setWindowTitle(tr("Baza danych"));
+    box->setText(tr("Chcesz utworzyć nową baze danych, \nczy wybrać istniejącą ?"));
+    box->setStandardButtons(QMessageBox::Yes|QMessageBox::No);
+    auto buttonY = box->button(QMessageBox::Yes);
+    buttonY->setText(tr("Utwórz nową"));
+    auto buttonN = box->button(QMessageBox::No);
+    buttonN->setText(tr("Wybierz istniejącą"));
+    int choice = box->exec();
     if (choice == QMessageBox::Yes){
-        QString fn = QFileDialog::getSaveFileName(this,"Tworzenie bazy..","");
+        QString fn = QFileDialog::getSaveFileName(this,"Tworzenie bazy..","","");
         db.setDatabaseName(fn);
         if (!db.open()) {
             QMessageBox::critical(nullptr, QObject::tr("Cannot open database"),
@@ -162,8 +151,8 @@ Widget::Widget(QWidget *parent)
         QSqlQuery query;
         query.exec("create table samochody (rejestracja varchar(10) primary key, "
                    "vin varchar(20), model varchar(20), marka varchar(20))");
-    }else{
-        QString fn = QFileDialog::getOpenFileName(this,"Otwórz bazę");
+    }else if(choice == QMessageBox::No){
+        QString fn = QFileDialog::getOpenFileName(this,"Otwórz bazę","","");
         db.setDatabaseName(fn);
         if (!db.open()) {
             QMessageBox::critical(nullptr, QObject::tr("Cannot open database"),
@@ -202,14 +191,14 @@ Widget::Widget(QWidget *parent)
     buttonBox->addButton(quitButton, QDialogButtonBox::RejectRole);
     buttonBox->addButton(extraButton,QDialogButtonBox::ActionRole);
     connect(addButton,&QPushButton::clicked,this,[this]{
-        if (anw_pointer == nullptr){
+        if (!anw_pointer){
             anw_pointer = new AddNewWindow();
             connect(anw_pointer,&AddNewWindow::addNew,this,&Widget::newCar);
             anw_pointer->show();
         }
     });
     connect(extraButton,&QPushButton::clicked,this,[=]{
-        if (progress_pointer == nullptr){
+        if (!progress_pointer){
             progress_pointer = new progress();
             progress_pointer->show();
         }
@@ -235,19 +224,23 @@ Widget::Widget(QWidget *parent)
 }
 
 void Widget::closeEvent(QCloseEvent *event){
-    this->deleteLater();
+    int t = 0;
+    if (progress_pointer){
+        progress_pointer->close();
+        t += 100;
+    }
+
+    if (anw_pointer){
+        anw_pointer->close();
+        t += 250;
+    }
+    thread()->msleep(t);
     QWidget::closeEvent(event);
 }
 
 Widget::~Widget()
 {
-    if (!progress_pointer.isNull()){
-        progress_pointer->deleteLater();
-    }
 
-    if (!anw_pointer.isNull()){
-        anw_pointer->deleteLater();
-    }
 }
 
 void Widget::submit()

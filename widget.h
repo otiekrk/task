@@ -30,16 +30,13 @@ public :
 public slots:
     void process();
     void breakMe();
-    void breakMe2();
 signals:
-    void breakDone();
     void newValue(int v);
     void finished();
     void continueThread();
 private:
     int value = 0;
-    bool breaked;
-    bool ref;
+    bool breaked = false;
 };
 
 class progress : public QWidget
@@ -47,8 +44,8 @@ class progress : public QWidget
     Q_OBJECT
 public:
     progress(QWidget *parent = nullptr);
+    ~progress();
 public slots:
-    void destructMe();
     void setProgressValue(int v);
 signals:
     void breakThread();
@@ -84,8 +81,8 @@ private:
     QSqlTableModel *model;
 
     QPushButton *extraButton = new QPushButton(tr("ProgressBar"),this);
-    QPointer<progress> progress_pointer;
-    QPointer<AddNewWindow> anw_pointer;
+    QPointer<progress> progress_pointer = nullptr;
+    QPointer<AddNewWindow> anw_pointer = nullptr;
     QThread mainThread;
 };
 
